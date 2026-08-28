@@ -408,6 +408,21 @@
 					<p class="mt-4 max-w-xs text-sm leading-relaxed text-neutral-500">
 						The clean, structured, cross-linked Medical Knowledge API. Open at the core.
 					</p>
+					<a
+						href="https://www.producthunt.com/products/asclevor-case-search/reviews/new?utm_source=badge-product_review&utm_medium=badge&utm_source=badge-asclevor&#0045;case&#0045;search"
+						target="_blank"
+						rel="noopener noreferrer"
+						class="mt-6 inline-block"
+					>
+						<img
+							src="https://api.producthunt.com/widgets/embed-image/v1/product_review.svg?product_id=1304046&theme=dark"
+							alt="Asclevor&#0032;Case&#0032;Search - Semantic&#0032;search&#0032;for&#0032;clinical&#0032;case&#0032;records | Product Hunt"
+							style="width: 250px; height: 54px"
+							width="250"
+							height="54"
+							loading="lazy"
+						/>
+					</a>
 				</div>
 				<div>
 					<p class="text-[11px] tracking-[0.24em] text-neutral-500 uppercase">Product</p>
