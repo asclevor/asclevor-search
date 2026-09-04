@@ -3,8 +3,10 @@
 	import SearchBar from '$lib/components/SearchBar.svelte';
 	import ResultCard from '$lib/components/ResultCard.svelte';
 	import ContextPanel from '$lib/components/ContextPanel.svelte';
+	import QueryFilters from '$lib/components/QueryFilters.svelte';
 	import logo from '$lib/assets/logo.svg';
 	import { classifySpecialty, extractTerms, extractYear } from '$lib/utils/clinical.js';
+	import { parseAge, searchCases } from '$lib/utils/search.js';
 
 	const EXAMPLES = [
 		'60-year-old female, ARDS from COVID-19, desaturation during physical therapy',
@@ -15,7 +17,10 @@
 
 	let query = $state('');
 	let activeQuery = $state('');
-	let limit = $state(3);
+	let k = $state(5);
+	let gender = $state('any');
+	let ageMin = $state('');
+	let ageMax = $state('');
 	let searched = $state(false);
 	let loading = $state(false);
 	let results = $state([]);
@@ -23,6 +28,9 @@
 	let error = $state(null);
 	let expanded = $state(new Set());
 	let responseJson = $state('');
+	let requestBody = $state('');
+	let modeUsed = $state(null);
+	let appliedFilters = $state(null);
 	let specialty = $state('all');
 	let year = $state('all');
 	let searchBar = $state(null);
@@ -47,20 +55,19 @@
 		)
 	);
 	const terms = $derived(extractTerms(activeQuery));
-	const hasActiveFilters = $derived(specialty !== 'all' || year !== 'all');
-	const requestBody = $derived(
-		JSON.stringify(
-			{
-				query: activeQuery.length > 72 ? `${activeQuery.slice(0, 72)}…` : activeQuery,
-				limit
-			},
-			null,
-			2
-		)
-	);
+	const activeGender = $derived(appliedFilters?.gender ?? null);
+	const activeAge = $derived.by(() => {
+		const f = appliedFilters;
+		if (!f || (f.ageMin == null && f.ageMax == null)) return null;
+		if (f.ageMin != null && f.ageMax != null) return `Age ${f.ageMin}–${f.ageMax}`;
+		return f.ageMin != null ? `Age ${f.ageMin}+` : `Age ≤${f.ageMax}`;
+	});
 
 	function cardKey(r, i) {
-		return r.pmid || r.patientId || `${r.title}-${i}`;
+		// patient_uid is unique per case; PMID/title can repeat when one article
+		// contributes multiple patients — always suffix the stable index.
+		const base = r.patientId || r.pmid || r.title;
+		return `${base}-${r.index ?? i}`;
 	}
 
 	function toggleExpand(key) {
@@ -73,22 +80,43 @@
 	function syncUrl() {
 		const url = new URL(window.location.href);
 		url.searchParams.set('q', activeQuery);
-		url.searchParams.set('limit', String(limit));
+		url.searchParams.set('k', String(k));
+		url.searchParams.delete('limit');
+		if (gender === 'F' || gender === 'M') url.searchParams.set('gender', gender);
+		else url.searchParams.delete('gender');
+		if (parseAge(ageMin) != null) url.searchParams.set('amin', String(parseAge(ageMin)));
+		else url.searchParams.delete('amin');
+		if (parseAge(ageMax) != null) url.searchParams.set('amax', String(parseAge(ageMax)));
+		else url.searchParams.delete('amax');
 		history.replaceState(null, '', url);
 	}
 
-	async function search(q = query, l = limit) {
+	function clearGenderFilter() {
+		gender = 'any';
+		if (searched && !loading) search(activeQuery);
+	}
+
+	function clearAgeFilter() {
+		ageMin = '';
+		ageMax = '';
+		if (searched && !loading) search(activeQuery);
+	}
+
+	async function search(q = query, kk = k) {
 		const trimmed = String(q ?? '').trim();
 		if (!trimmed || loading) return;
 		query = trimmed;
 		activeQuery = trimmed;
-		limit = l;
+		k = kk;
 		expanded = new Set();
 		specialty = 'all';
 		year = 'all';
 		error = null;
 		results = [];
 		timings = null;
+		modeUsed = null;
+		appliedFilters = null;
+		requestBody = '';
 		responseJson = '';
 		loading = true;
 		searched = true;
@@ -96,23 +124,20 @@
 		syncUrl();
 		searchBar?.focus();
 
+		const payload = { query: trimmed, k };
+		if (gender === 'F' || gender === 'M') payload.gender = gender;
+		if (parseAge(ageMin) != null) payload.age_min = parseAge(ageMin);
+		if (parseAge(ageMax) != null) payload.age_max = parseAge(ageMax);
+
 		try {
-			const res = await fetch('/api/search', {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ query: trimmed, limit })
-			});
-			const data = await res.json();
-			if (!res.ok) throw new Error(data?.error || `Request failed with ${res.status}.`);
+			const data = await searchCases(payload);
 			results = data.results ?? [];
 			timings = data.timings ?? null;
+			modeUsed = data.modeUsed ?? null;
+			appliedFilters = data.filters ?? null;
+			requestBody = JSON.stringify(data.request ?? payload, null, 2);
 			responseJson = JSON.stringify(
-				{
-					query: data.query ?? trimmed,
-					limit: data.limit ?? limit,
-					timings: data.timings ?? null,
-					results: data.results ?? []
-				},
+				data.raw ?? { query: data.query ?? trimmed, results: data.results ?? [] },
 				null,
 				2
 			);
@@ -131,9 +156,15 @@
 	onMount(() => {
 		const params = new URLSearchParams(window.location.search);
 		const q = params.get('q');
-		const l = Number.parseInt(params.get('limit') ?? '', 10);
-		if ([3, 5, 10].includes(l)) limit = l;
-		if (q) search(q, limit);
+		const kk = Number.parseInt(params.get('k') ?? params.get('limit') ?? '', 10);
+		if ([3, 5, 10].includes(kk)) k = kk;
+		const g = (params.get('gender') ?? '').trim().toUpperCase();
+		if (g === 'F' || g === 'M') gender = g;
+		const amin = params.get('amin') ?? '';
+		if (/^\d{1,3}$/.test(amin)) ageMin = amin;
+		const amax = params.get('amax') ?? '';
+		if (/^\d{1,3}$/.test(amax)) ageMax = amax;
+		if (q) search(q, k);
 
 		function onKeydown(e) {
 			if (
@@ -194,10 +225,17 @@
 					</a>
 				</nav>
 			</div>
-			<div class="flex items-center gap-3 pb-3">
-				<div class="min-w-0 flex-1">
+			<div class="flex flex-wrap items-center gap-2.5 pb-3">
+				<div class="min-w-0 flex-1 basis-64">
 					<SearchBar bind:this={searchBar} bind:value={query} {loading} onsubmit={() => search()} />
 				</div>
+				<QueryFilters
+					bind:gender
+					bind:ageMin
+					bind:ageMax
+					onsubmit={() => search()}
+					ongenderchange={() => searched && !loading && search(activeQuery)}
+				/>
 			</div>
 			{#if loading}
 				<div class="absolute inset-x-0 -bottom-px h-0.5 overflow-hidden" aria-hidden="true">
@@ -264,6 +302,42 @@
 						</p>
 					</div>
 					<div class="flex flex-wrap items-center gap-2">
+						{#if activeGender}
+							<button
+								type="button"
+								onclick={clearGenderFilter}
+								class="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 py-0.5 pr-1.5 pl-2.5 text-[11px] font-medium text-blue-700 transition hover:border-blue-300"
+							>
+								{activeGender === 'F' ? 'Female' : 'Male'}
+								<svg
+									class="size-3"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg
+								>
+							</button>
+						{/if}
+						{#if activeAge}
+							<button
+								type="button"
+								onclick={clearAgeFilter}
+								class="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 py-0.5 pr-1.5 pl-2.5 text-[11px] font-medium text-blue-700 transition hover:border-blue-300"
+							>
+								{activeAge}
+								<svg
+									class="size-3"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg
+								>
+							</button>
+						{/if}
 						{#if specialty !== 'all'}
 							<button
 								type="button"
@@ -405,8 +479,10 @@
 
 					<ContextPanel
 						{activeQuery}
-						{limit}
-						onlimit={(l) => search(activeQuery, l)}
+						{k}
+						onk={(l) => search(activeQuery, l)}
+						{modeUsed}
+						{appliedFilters}
 						{timings}
 						{terms}
 						{specialties}

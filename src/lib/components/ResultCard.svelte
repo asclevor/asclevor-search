@@ -22,7 +22,9 @@
 	const year = $derived(extractYear(r));
 	const extra = $derived(extractLeftoverMeta(r).slice(0, 4));
 	const sourceName = $derived(friendlySource(r.source));
-	const pmidUrl = $derived(r.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${r.pmid}/` : null);
+	const pmidUrl = $derived(
+		r.pubmedUrl || (r.pmid ? `https://pubmed.ncbi.nlm.nih.gov/${r.pmid}/` : null)
+	);
 
 	// Dense view: two rows only. Interventions joins only when expanded.
 	const outcomeText = $derived(sections?.outcome || sections?.interventions || '');
@@ -302,7 +304,7 @@
 
 	{#if extra.length}
 		<div class="mt-1.5 flex flex-wrap gap-1.5">
-			{#each extra as m (`${m.k}-${m.v}`)}
+			{#each extra as m, mi (`${m.k}-${m.v}-${mi}`)}
 				<span
 					class="rounded border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-500"
 				>

@@ -43,6 +43,20 @@ export function extractYear(r) {
 
 export function extractDemographics(r) {
 	const out = {};
+	// Structured fields first (v2 API returns age_years / gender per case).
+	const structuredAge = Number(r?.ageYears ?? r?.age_years);
+	if (Number.isFinite(structuredAge) && structuredAge >= 0 && structuredAge < 130)
+		out.age = `${Math.round(structuredAge)} y`;
+	const g = String(r?.gender ?? '')
+		.trim()
+		.toLowerCase();
+	if (g)
+		out.sex =
+			g === 'f' || g === 'female' || g === 'woman'
+				? 'Female'
+				: g === 'm' || g === 'male' || g === 'man'
+					? 'Male'
+					: String(r.gender).slice(0, 12);
 	if (Array.isArray(r?.meta)) {
 		for (const m of r.meta) {
 			const k = m.k.toLowerCase();

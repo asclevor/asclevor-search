@@ -3,8 +3,8 @@
 
 	let {
 		activeQuery = '',
-		limit = 3,
-		onlimit,
+		k = 5,
+		onk,
 		timings = null,
 		terms = [],
 		specialties = [],
@@ -15,11 +15,24 @@
 		onyear,
 		responseJson = '',
 		requestBody = '',
-		latencyMs = null
+		latencyMs = null,
+		modeUsed = null,
+		appliedFilters = null
 	} = $props();
 
 	let tab = $state('clinical');
 	let pmid = $state('');
+
+	const cohortLabel = $derived.by(() => {
+		const f = appliedFilters;
+		if (!f || (f.gender == null && f.ageMin == null && f.ageMax == null)) return null;
+		const parts = [];
+		if (f.gender) parts.push(f.gender === 'F' ? 'Female' : f.gender === 'M' ? 'Male' : f.gender);
+		if (f.ageMin != null && f.ageMax != null) parts.push(`${f.ageMin}–${f.ageMax} y`);
+		else if (f.ageMin != null) parts.push(`${f.ageMin}+ y`);
+		else if (f.ageMax != null) parts.push(`\u2264${f.ageMax} y`);
+		return parts.join(' · ');
+	});
 
 	function openPmid(e) {
 		e.preventDefault();
@@ -117,17 +130,17 @@
 					Query parameters
 				</h3>
 				<div class="flex items-center justify-between gap-3">
-					<span class="text-xs text-slate-600">Results limit</span>
+					<span class="text-xs text-slate-600">Results (k)</span>
 					<div
 						class="flex overflow-hidden rounded-md border border-slate-300"
 						role="group"
-						aria-label="Results limit"
+						aria-label="Results count"
 					>
 						{#each [3, 5, 10] as l (l)}
 							<button
 								type="button"
-								onclick={() => onlimit?.(l)}
-								class="h-6 w-8 text-xs font-medium tabular-nums transition {limit === l
+								onclick={() => onk?.(l)}
+								class="h-6 w-8 text-xs font-medium tabular-nums transition {k === l
 									? 'bg-slate-900 text-white'
 									: 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-900'} focus-visible:outline-2 focus-visible:outline-blue-600"
 							>
@@ -135,6 +148,14 @@
 							</button>
 						{/each}
 					</div>
+				</div>
+				<div class="flex items-center justify-between gap-3">
+					<span class="text-xs text-slate-600">Cohort filters</span>
+					<span class="text-[11px] font-medium text-slate-700"> {cohortLabel ?? 'None'} </span>
+				</div>
+				<div class="flex items-center justify-between gap-3">
+					<span class="text-xs text-slate-600">Search mode</span>
+					<span class="font-mono text-[11px] text-slate-500">{modeUsed ?? 'auto'}</span>
 				</div>
 				{#if timings}
 					<div class="grid grid-cols-3 gap-2">
@@ -284,7 +305,7 @@
 			<div class="flex flex-wrap items-center gap-1.5">
 				<span
 					class="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] font-medium text-slate-600"
-					>POST /api/search</span
+					>POST api.asclevor.com/search</span
 				>
 				<span
 					class="rounded-md border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 font-mono text-[10px] font-medium text-emerald-700"

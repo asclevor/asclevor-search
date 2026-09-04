@@ -35,8 +35,9 @@ code/PMID/IDs.
 ## Layout
 
 - Max width 1440, page padding 16/24. Sticky top banner: brand row (real
-  Asclevor logomark + wordmark, 52px) + persistent search row; thin blue
-  progress bar rides its bottom edge while loading.
+  Asclevor logomark + wordmark, 52px) + persistent search row with inline
+  cohort filters (sex select, age min–max inputs); thin blue progress bar
+  rides its bottom edge while loading.
 - Results: `lg:grid-cols-[minmax(0,1fr)_360px]` ≈ 70/30 split, gap 24;
   cards stack with 10px gaps (~153px each, 4 visible in a 900px viewport).
   Sidebar sticky at `top-[8.25rem]`. Below lg, sidebar stacks under the feed.
@@ -49,6 +50,10 @@ code/PMID/IDs.
 
 - **SearchBar** — white field, slate-300 border, subtle shadow, blue focus
   ring; magnifier, clear (×), divider, blue submit with arrow; `/` focuses.
+- **QueryFilters** — cohort controls beside the search field: sex select
+  (Any/Female/Male, re-runs an active search on change) and age min–max
+  numeric inputs (applied on Enter/Search); removable blue chips echo the
+  applied cohort in the results toolbar.
 - **ResultCard** — dense rounded-lg instrument (~155px): single inline
   metadata line (PMID link · source · year · blue demographics) above a
   1–2-line clamped title; top-right rail holds ghost icon actions (view /
@@ -65,10 +70,12 @@ code/PMID/IDs.
   (open circle + chevron, black stroke), used verbatim in the header; the
   favicon renders the same mark at 80% on a white rounded square for
   dark-tab visibility.
-- **ContextPanel** — segmented tabs: Clinical Summary (active query, limit
-  3/5/10, latency tiles, extracted terminology pills, specialty/year/PMID
-  filters) / Developer API (POST/status/latency chips, request body, dark
-  JsonViewer with sticky line numbers, syntax colors, Copy JSON).
+- **ContextPanel** — segmented tabs: Clinical Summary (active query, k
+  3/5/10, cohort filters + search mode, latency tiles, extracted terminology
+  pills, specialty/year/PMID filters) / Developer API
+  (POST api.asclevor.com/search + status/latency chips, upstream request
+  body, raw upstream response in dark JsonViewer with sticky line numbers,
+  syntax colors, Copy JSON).
 - **States** — skeleton pulse cards while loading; rose error card with
   retry; centered empty cards with recovery copy; removable blue filter chips
   in the results toolbar.
